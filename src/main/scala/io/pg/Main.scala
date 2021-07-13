@@ -1,6 +1,5 @@
 package io.pg
 
-import cats.effect.ExitCode
 import cats.effect.IO
 import cats.effect.IOApp
 import cats.effect.Resource
@@ -13,15 +12,16 @@ import io.chrisdavenport.cats.time.instances.all._
 import io.odin.Level
 import io.odin.Logger
 import io.odin.formatter.Formatter
+import io.pg.config.ProjectConfigReader
 import org.http4s.HttpApp
 import org.http4s.blaze.server.BlazeServerBuilder
 import org.http4s.server.middleware
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
-import cats.arrow.FunctionK
+import io.github.vigoo.prox.ProxFS2
 
-object Main extends IOApp {
+object Main extends IOApp.Simple {
 
   def mkLogger[F[_]: Async](fToIO: F ~> IO): Resource[F, Logger[F]] = {
 
@@ -87,11 +87,32 @@ object Main extends IOApp {
       _                            <- logStarted(config.meta).toResource
     } yield ()
 
-  def run(args: List[String]): IO[ExitCode] =
-    AppConfig
-      .appConfig
-      .resource[IO]
-      .flatMap(serve[IO](FunctionK.id))
-      .useForever
+  def run: IO[Unit] =
+    runDemo
+
+  // AppConfig
+  //   .appConfig
+  //   .resource[IO]
+  //   .flatMap(serve[IO])
+  //   .use(_ => IO.never)
+
+  private implicit val proxfs2 = ProxFS2[IO]
+
+  private def runDemo: IO[Unit] =
+    ProjectConfigReader
+      .nixJsonConfig[IO]
+      .flatMap(
+        _.readConfig(null)(
+          MergeRequestState(
+            42L,
+            42L,
+            "scala_chad",
+            Some("test labels: test, semver-patch test\nfoobar"),
+            MergeRequestState.Status.Success,
+            MergeRequestState.Mergeability.CanMerge
+          )
+        )
+      )
+      .flatMap(a => IO(println(a)))
 
 }

@@ -4,7 +4,9 @@ import cats.MonadThrow
 import cats.effect.Ref
 import cats.implicits._
 import cats.mtl.Stateful
-import io.pg.config.ProjectConfig
+import io.pg.MergeRequestState
+import io.pg.ProjectActions
+import io.pg.config.Matcher
 import io.pg.config.ProjectConfigReader
 import io.pg.gitlab.webhook.Project
 import monocle.macros.Lenses
@@ -15,7 +17,7 @@ object ProjectConfigReaderFake {
 
   @Lenses
   sealed case class State(
-    configs: Map[Long, ProjectConfig]
+    configs: Map[Long, Matcher]
   )
 
   object State {
@@ -24,7 +26,7 @@ object ProjectConfigReaderFake {
     /** A collection of modifiers on the state, which will be provided together with the instance using it.
       */
     trait Modifiers[F[_]] {
-      def register(projectId: Long, config: ProjectConfig): F[Unit]
+      def register(projectId: Long, config: Matcher): F[Unit]
     }
 
   }
@@ -38,12 +40,13 @@ object ProjectConfigReaderFake {
   def instance[F[_]: Data: MonadThrow]: ProjectConfigReader[F] with State.Modifiers[F] =
     new ProjectConfigReader[F] with State.Modifiers[F] {
 
-      def readConfig(project: Project): F[ProjectConfig] =
+      def readConfig(project: Project): MergeRequestState => F[ProjectActions.Matched[Unit]] = s =>
         Data[F]
           .get
           .flatMap(_.configs.get(project.id).liftTo[F](new Throwable(s"Unknown project: $project")))
+          .map(matcher => ProjectActions.compileMatcher(matcher).matches(s))
 
-      def register(projectId: Long, config: ProjectConfig): F[Unit] =
+      def register(projectId: Long, config: Matcher): F[Unit] =
         Data[F].modify(State.configs.modify(_ + (projectId -> config)))
 
     }

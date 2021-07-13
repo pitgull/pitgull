@@ -21,6 +21,7 @@ import sttp.client3.SttpBackend
 import sttp.client3.http4s.Http4sBackend
 
 import scala.concurrent.ExecutionContext
+import io.github.vigoo.prox.ProxFS2
 
 sealed trait Event extends Product with Serializable
 
@@ -38,49 +39,54 @@ object Application {
   def resource[F[_]: Logger: Async](
     config: AppConfig
   ): Resource[F, Application[F]] = {
-    implicit val projectConfigReader = ProjectConfigReader.test[F]
+    implicit val proxfs2: ProxFS2[F] = ProxFS2[F]
 
-    Queue
-      .bounded[F, Event](config.queues.maxSize)
-      .map(Channel.fromQueue(_))
+    ProjectConfigReader
+      .nixJsonConfig[F]
       .toResource
-      .flatMap { eventChannel =>
-        implicit val webhookChannel: Channel[F, WebhookEvent] =
-          eventChannel.only[Event.Webhook].imap(_.value)(Event.Webhook)
+      .flatMap { implicit pcr =>
+        Queue
+          .bounded[F, Event](config.queues.maxSize)
+          .map(Channel.fromQueue(_))
+          .toResource
+          .flatMap { eventChannel =>
+            implicit val webhookChannel: Channel[F, WebhookEvent] =
+              eventChannel.only[Event.Webhook].imap(_.value)(Event.Webhook)
 
-        BlazeClientBuilder[F](ExecutionContext.global)
-          .resource
-          .map(
-            org
-              .http4s
-              .client
-              .middleware
-              .Logger(logHeaders = true, logBody = false, redactHeadersWhen = config.middleware.sensitiveHeaders.contains)
-          )
-          .map { client =>
-            implicit val backend: SttpBackend[F, Fs2Streams[F]] =
-              Http4sBackend.usingClient[F](client)
+            BlazeClientBuilder[F](ExecutionContext.global)
+              .resource
+              .map(
+                org
+                  .http4s
+                  .client
+                  .middleware
+                  .Logger(logHeaders = true, logBody = false, redactHeadersWhen = config.middleware.sensitiveHeaders.contains)
+              )
+              .map { client =>
+                implicit val backend: SttpBackend[F, Fs2Streams[F]] =
+                  Http4sBackend.usingClient[F](client)
 
-            implicit val gitlab: Gitlab[F] =
-              Gitlab.sttpInstance[F](config.git.apiUrl, config.git.apiToken)
+                implicit val gitlab: Gitlab[F] =
+                  Gitlab.sttpInstance[F](config.git.apiUrl, config.git.apiToken)
 
-            implicit val projectActions: ProjectActions[F] =
-              ProjectActions.instance[F]
+                implicit val projectActions: ProjectActions[F] =
+                  ProjectActions.instance[F]
 
-            implicit val stateResolver: StateResolver[F] =
-              StateResolver.instance[F]
+                implicit val stateResolver: StateResolver[F] =
+                  StateResolver.instance[F]
 
-            implicit val mergeRequests: MergeRequests[F] =
-              MergeRequests.instance[F]
+                implicit val mergeRequests: MergeRequests[F] =
+                  MergeRequests.instance[F]
 
-            val webhookProcess = BackgroundProcess.fromProcessor(
-              webhookChannel
-            )(Processor.simple(WebhookProcessor.instance[F]))
+                val webhookProcess = BackgroundProcess.fromProcessor(
+                  webhookChannel
+                )(Processor.simple(WebhookProcessor.instance[F]))
 
-            new Application[F](
-              routes = WebhookRouter.routes[F].orNotFound,
-              background = NonEmptyList.one(webhookProcess)
-            )
+                new Application[F](
+                  routes = WebhookRouter.routes[F].orNotFound,
+                  background = NonEmptyList.one(webhookProcess)
+                )
+              }
           }
       }
   }

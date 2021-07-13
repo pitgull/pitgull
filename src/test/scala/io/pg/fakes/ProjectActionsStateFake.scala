@@ -13,7 +13,6 @@ import io.pg.ProjectAction.Merge
 import io.pg.ProjectAction.Rebase
 import io.pg.ProjectActions
 import io.pg.StateResolver
-import io.pg.gitlab.Gitlab.MergeRequestInfo
 import io.pg.gitlab.webhook.Project
 import io.scalaland.chimney.dsl._
 import monocle.macros.Lenses
@@ -34,7 +33,7 @@ object ProjectActionsStateFake {
   object State {
     val initial: State = State(Map.empty, Chain.nil)
 
-    /**  A collection of modifiers on the state, which will be provided together with the instance using it.
+    /** A collection of modifiers on the state, which will be provided together with the instance using it.
       */
     trait Modifiers[F[_]] {
       // returns Iid of created MR
@@ -69,7 +68,7 @@ object ProjectActionsStateFake {
       def finishPipeline(key: MergeRequestDescription) = State.mergeRequests.modify {
         _.updatedWith(key) {
           _.map { state =>
-            state.copy(status = MergeRequestInfo.Status.Success)
+            state.copy(status = MergeRequestState.Status.Success)
           }
         }
       }
@@ -84,8 +83,8 @@ object ProjectActionsStateFake {
   def refInstance[F[_]: Ref.Make: Logger: Monad]: F[ProjectActions[F] with StateResolver[F] with State.Modifiers[F]] =
     Ref[F].of(State.initial).map(FakeUtils.statefulRef(_)).map(implicit F => instance[F])
 
-  /** This instance has both the capabilities of ProjectActions and StateResolver,
-    * because they operate on the same state, and the state is sealed by convention.
+  /** This instance has both the capabilities of ProjectActions and StateResolver, because they operate on the same state, and the state is
+    * sealed by convention.
     */
   def instance[
     F[_]: Data: Monad: Logger
@@ -100,7 +99,7 @@ object ProjectActionsStateFake {
         case r: Rebase => State.modifications.rebase(r)
       }
 
-      actionChange >>> State.modifications.logAction(action)
+      actionChange andThen State.modifications.logAction(action)
     }
 
     def resolve(project: Project): F[List[MergeRequestState]] =
@@ -125,7 +124,7 @@ object ProjectActionsStateFake {
           mergeRequestIid = newId,
           authorUsername = authorUsername,
           description = description,
-          status = MergeRequestInfo.Status.Other("Created"),
+          status = MergeRequestState.Status.Other("Created"),
           mergeability = Mergeability.CanMerge
         )
 

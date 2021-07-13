@@ -11,6 +11,8 @@ import io.pg.gitlab.webhook.Project
 import io.scalaland.chimney.dsl._
 import cats.Show
 import monocle.macros.Lenses
+import io.pg.nix.Nix
+import Nix.syntax._
 
 @finalAlg
 trait StateResolver[F[_]] {
@@ -36,7 +38,10 @@ object StateResolver {
       ): MergeRequestState =
         mr
           .into[MergeRequestState]
-          .withFieldComputed(_.status, _.status.getOrElse(MergeRequestInfo.Status.Success)) //for now - no pipeline means success
+          .withFieldComputed(
+            _.status,
+            _.status.getOrElse(MergeRequestInfo.Status.Success).transformInto[MergeRequestState.Status]
+          ) //for now - no pipeline means success
           .withFieldComputed(
             _.mergeability,
             info =>
@@ -67,11 +72,24 @@ final case class MergeRequestState(
   mergeRequestIid: Long,
   authorUsername: String,
   description: Option[String],
-  status: MergeRequestInfo.Status,
+  status: MergeRequestState.Status,
   mergeability: MergeRequestState.Mergeability
 )
 
 object MergeRequestState {
+  sealed trait Status extends Product with Serializable
+
+  object Status {
+    case object Success extends Status
+    final case class Other(value: String) extends Status
+
+    implicit val statusToNix: Nix.From[MergeRequestState.Status] = Nix.From[String].contramap {
+      case Success      => "success"
+      case Other(value) => value
+    }
+
+  }
+
   sealed trait Mergeability extends Product with Serializable
 
   object Mergeability {
@@ -89,4 +107,12 @@ object MergeRequestState {
 
   implicit val showTrimmed: Show[MergeRequestState] =
     MergeRequestState.description.modify(_.map(TextUtils.trim(maxChars = 80))).apply(_).toString
+
+  implicit val stateAsNix: Nix.From[MergeRequestState] = mrs =>
+    Nix.Record(
+      mrs.status.toNix.at("status") ++
+        mrs.authorUsername.toNix.at("author") ++
+        mrs.description.getOrElse("").toNix.at("description")
+    )
+
 }

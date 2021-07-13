@@ -42,7 +42,7 @@ ThisBuild / githubWorkflowPublishPreamble := Seq(
   )
 )
 
-ThisBuild / githubWorkflowPublish := Seq(WorkflowStep.Sbt(List("docker:publish")))
+ThisBuild / githubWorkflowPublish := Seq(WorkflowStep.Sbt(List("Docker/publish")))
 
 // todo: reenable missinglink
 ThisBuild / githubWorkflowBuild := List(
@@ -167,23 +167,23 @@ lazy val pitgull =
     .settings(commonSettings)
     .settings(
       name := "pitgull",
-      dockerBaseImage := "adoptopenjdk/openjdk11:jre-11.0.8_10",
-      // dockerCommands += ExecCmd(
-      //   "RUN",
-      //   "sh",
-      //   "-c",
-      //   "apk update && apk add curl bash"
-      // ),
-      // dockerCommands ++=
-      //   Cmd("USER", "root") :: ExecCmd(
-      //     "RUN",
-      //     "sh",
-      //     "-c",
-      //     "apk update && apk add curl bash"
-      //   ) :: installDhallJson :: Nil,
+      dockerBaseImage := "nixos/nix:2.3.11",
+      dockerCommands ++=
+        // note: this works, but it suuuuuuuuuper heavy (almost 2 gigs for the image)
+        // also runs as root, which we can't even do on the target platform
+        Cmd("ENV", "NIXPKGS_ALLOW_UNFREE", "1") ::
+          Cmd("USER", "root") ::
+          ExecCmd(
+            "RUN",
+            "nix-env",
+            "-iA",
+            "nixpkgs.jdk11",
+            "nixpkgs.bash"
+          ) :: Nil,
       Docker / packageName := "kubukoz/pitgull",
-      Docker / mappings += (
-        file("./example.dhall") -> "/opt/docker/example.dhall"
+      Docker / mappings ++= Seq(
+        file("./wms.nix") -> "/opt/docker/wms.nix",
+        file("./nix/pitgull.nix") -> "/opt/docker/nix/pitgull.nix"
       ),
       mainClass := Some("io.pg.ProjectConfigReader"),
       buildInfoOptions += BuildInfoOption.ConstantValue,
