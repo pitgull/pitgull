@@ -34,7 +34,7 @@ object ProjectActionsStateFake {
   object State {
     val initial: State = State(Map.empty, Chain.nil)
 
-    /**  A collection of modifiers on the state, which will be provided together with the instance using it.
+    /** A collection of modifiers on the state, which will be provided together with the instance using it.
       */
     trait Modifiers[F[_]] {
       // returns Iid of created MR
@@ -84,8 +84,8 @@ object ProjectActionsStateFake {
   def refInstance[F[_]: Ref.Make: Logger: Monad]: F[ProjectActions[F] with StateResolver[F] with State.Modifiers[F]] =
     Ref[F].of(State.initial).map(FakeUtils.statefulRef(_)).map(implicit F => instance[F])
 
-  /** This instance has both the capabilities of ProjectActions and StateResolver,
-    * because they operate on the same state, and the state is sealed by convention.
+  /** This instance has both the capabilities of ProjectActions and StateResolver, because they operate on the same state, and the state is
+    * sealed by convention.
     */
   def instance[
     F[_]: Data: Monad: Logger

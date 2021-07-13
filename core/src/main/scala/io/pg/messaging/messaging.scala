@@ -50,8 +50,8 @@ object Channel {
 
   implicit class ChannelOpticsSyntax[F[_], A](val ch: Channel[F, A]) extends AnyVal {
 
-    /** Transforms a channel into one that forwards everything to the publisher,
-      * but only consumes a subset of the original channel's messages (the ones that match `f`).
+    /** Transforms a channel into one that forwards everything to the publisher, but only consumes a subset of the original channel's
+      * messages (the ones that match `f`).
       */
     def prism[B](f: PartialFunction[A, B])(g: B => A): Channel[F, B] =
       new Channel[F, B] {

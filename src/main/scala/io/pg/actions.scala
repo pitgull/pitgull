@@ -169,17 +169,15 @@ object ProjectActions {
   def exists[A](base: MatcherFunction[A]): MatcherFunction[Option[A]] =
     _.fold[Matched[Unit]](Mismatch.ValueEmpty.leftNel)(base.matches)
 
-  def oneOf[A](matchers: List[MatcherFunction[A]]): MatcherFunction[A] = input => {
+  def oneOf[A](matchers: List[MatcherFunction[A]]): MatcherFunction[A] = input =>
     matchers
       .traverse(_.matches(input).swap)
       .swap
       .leftMap(Mismatch.ManyFailed)
       .toEitherNel
-  }
 
-  def not[A](matcher: MatcherFunction[A]): MatcherFunction[A] = input => {
+  def not[A](matcher: MatcherFunction[A]): MatcherFunction[A] = input =>
     matcher.matches(input).swap.leftMap(_ => Mismatch.NegationFailed).void.toEitherNel
-  }
 
   def autorMatches(matcher: TextMatcher): MatcherFunction[MergeRequestState] =
     matchTextMatcher(matcher)
