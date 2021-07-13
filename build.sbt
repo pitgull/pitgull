@@ -109,7 +109,7 @@ lazy val gitlab = project
 
 lazy val bootstrap = project
   .settings(
-    scalaVersion := "3.0.0",
+    scalaVersion := "3.0.1",
     libraryDependencies ++= List(
       "org.typelevel" %% "cats-core" % "2.6.1",
       "org.typelevel" %% "cats-effect" % "3.1.1",
